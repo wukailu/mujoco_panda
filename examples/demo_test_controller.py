@@ -1,11 +1,12 @@
 import os
 import time
-import mujoco_py
+
+import mujoco
 import numpy as np
+
 from mujoco_panda import PandaArm
-from mujoco_panda.utils.viewer_utils import render_frame
-from mujoco_panda.utils.debug_utils import ParallelPythonCmd
 from mujoco_panda.controllers.torque_based_controllers import OSHybridForceMotionController
+from mujoco_panda.utils.viewer_utils import render_frame
 
 
 def exec_func(cmd):
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     p = PandaArm(model_path=MODEL_PATH+'panda_block_table.xml',
                  render=True, compensate_gravity=False, smooth_ft_sensor=True)
 
-    if mujoco_py.functions.mj_isPyramidal(p.model):
+    if mujoco.mj_isPyramidal(p.model):
         print("Type of friction cone is pyramidal")
     else:
         print("Type of friction cone is eliptical")

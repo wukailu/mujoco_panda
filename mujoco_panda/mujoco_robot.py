@@ -1,11 +1,15 @@
 import copy
-import time
 import logging
 import threading
-import quaternion
-import numpy as np
-import mujoco_py as mjp
+import time
 from threading import Lock
+
+import mujoco as mjp
+import numpy as np
+import quaternion
+from mujoco import viewer
+
+from mujoco_panda.utils.mjpy_sim import OldSim
 
 LOG_LEVEL = "DEBUG"
 
@@ -47,13 +51,15 @@ class MujocoRobot(object):
             self.__class__.__name__), level=LOG_LEVEL)
         self._logger = logging.getLogger(__name__)
 
-        if isinstance(from_model,mjp.cymj.PyMjModel):
+        if isinstance(from_model, mjp.MjModel):
             self._model = from_model
         else:
-            self._model = mjp.load_model_from_path(model_path)
+            print("loading from ", model_path)
+            self._model = mjp.MjModel.from_xml_path(filename=model_path)
 
-        self._sim = mjp.MjSim(self._model)
-        self._viewer = mjp.MjViewer(self._sim) if render else None
+        from mujoco import Renderer
+        self._sim = OldSim(self._model)
+        self._viewer = Renderer(self._model) if render else None
 
         self._has_gripper = False  # by default, assume no gripper is attached
 
@@ -103,12 +109,12 @@ class MujocoRobot(object):
 
         if body_name in self._model.site_names:
             self._ee_is_a_site = True
-            self._ee_idx = self._model.site_name2id(body_name)
+            self._ee_idx = self._model.site(body_name)
             self._logger.debug(
                 "End-effector is a site in model: {}".format(body_name))
         else:
             self._ee_is_a_site = False
-            self._ee_idx = self._model.body_name2id(self._ee_name)
+            self._ee_idx = self._model.body(self._ee_name)
 
     def _use_last_defined_link(self):
         return self._model.nbody-1, self._model.body_id2name(self._model.nbody-1)
@@ -138,26 +144,26 @@ class MujocoRobot(object):
     @property
     def sim(self):
         """
-        Get mujoco_py.sim object associated with this instance
+        Get mujoco.sim object associated with this instance
 
-        :return: mujoco_py.sim object associated with this instance
-        :rtype: mujoco_py.MjSim
+        :return: mujoco.sim object associated with this instance
+        :rtype: mujoco.MjSim
         """
         return self._sim
 
     @property
     def viewer(self):
         """
-        :return: mujoco_py.MjViewer object associated with this instance
-        :rtype: mujoco_py.MjViewer
+        :return: mujoco.MjViewer object associated with this instance
+        :rtype: mujoco.MjViewer
         """
         return self._viewer
 
     @property
     def model(self):
         """
-        :return: mujoco_py.cymj.PyMjModel object associated with this instance
-        :rtype: mujoco_py.cymj.PyMjModel
+        :return: mujoco.cymj.PyMjModel object associated with this instance
+        :rtype: mujoco.cymj.PyMjModel
         """
         return self._model
 
@@ -192,7 +198,7 @@ class MujocoRobot(object):
                 if self._ft_site_name:
                     new_sensordata = np.zeros(6)
                     _, site_ori = self.site_pose(
-                        self._model.site_name2id(self._ft_site_name))
+                        self._model.site(self._ft_site_name))
                     rotation_mat = quaternion.as_rotation_matrix(
                         np.quaternion(*site_ori))
                     new_sensordata[:3] = np.dot(
@@ -218,7 +224,7 @@ class MujocoRobot(object):
         :rtype: [ContactInfo]
         """
         self._mutex.acquire()
-        mjp.functions.mj_rnePostConstraint(
+        mjp.mj_rnePostConstraint(
             self._sim.model, self._sim.data)
 
         nc = self._sim.data.ncon
@@ -229,7 +235,7 @@ class MujocoRobot(object):
         for i in range(nc):
             contact = self._sim.data.contact[i]
             c_array.fill(0)
-            mjp.functions.mj_contactForce(
+            mjp.mj_contactForce(
                 self._sim.model, self._sim.data, i, c_array)
 
             ori = np.flip(contact.frame.reshape(3, 3).T, 1)
@@ -328,7 +334,7 @@ class MujocoRobot(object):
         :rtype: np.ndarray, np.ndarray
         """
         if isinstance(body_id, str):
-            body_id = self._model.body_name2id(body_id)
+            body_id = self._model.body(body_id)
         if recompute and not self._forwarded:
             self.forward_sim()
         return self._sim.data.body_xpos[body_id].copy(), self._sim.data.body_xquat[body_id].copy()
@@ -346,7 +352,7 @@ class MujocoRobot(object):
         :rtype: np.ndarray, np.ndarray
         """
         if isinstance(site_id, str):
-            site_id = self._model.site_name2id(site_id)
+            site_id = self._model.site(site_id)
         if recompute and not self._forwarded:
             self.forward_sim()
         return self._sim.data.site_xpos[site_id].copy(), quaternion.as_float_array(quaternion.from_rotation_matrix(self._sim.data.site_xmat[site_id].copy().reshape(3, 3)))
@@ -533,6 +539,7 @@ class MujocoRobot(object):
 
 
         self._sim.step()
+        # mjp.mj_step(model=self._sim.model, data=self._sim.data)
 
         # if self._first_step_not_done:
         #     self._first_step_not_done = False
@@ -553,6 +560,7 @@ class MujocoRobot(object):
         not increased.
         """
         self._sim.forward()
+        # mjp.mj_forward(model=self._sim.model, data=self._sim.data)
         self._forwarded = True
 
     def render(self):
@@ -561,4 +569,6 @@ class MujocoRobot(object):
         asynchronous simulation.
         """
         if self._viewer is not None:
-            self._viewer.render()
+            viewer.launch_repl(self._sim.model, self._sim.data)
+            # viewer.launch(self._sim.model, self._sim.data)
+            # self._viewer.render()

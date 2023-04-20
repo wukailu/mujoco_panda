@@ -1,9 +1,8 @@
-import os
-import time
 import threading
-import mujoco_py
-import quaternion
+import time
+
 import numpy as np
+
 from mujoco_panda import PandaArm
 from mujoco_panda.utils.tf import quatdiff_in_euler
 from mujoco_panda.utils.viewer_utils import render_frame
@@ -87,7 +86,7 @@ if __name__ == "__main__":
 
     curr_ee, original_ori = p.ee_pose()
 
-    target_z_traj = np.linspace(curr_ee[2], curr_ee[2]+0.1, 25).tolist()
+    target_z_traj: list = np.linspace(curr_ee[2], curr_ee[2]+0.1, 25).tolist()
     z_target = curr_ee[2]
 
     target_pos = curr_ee

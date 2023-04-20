@@ -12,7 +12,7 @@ Robot models are in [mujoco_panda/models](mujoco_panda/models).
 
 To use all functionalities of the provided library, the following dependencies have to be met.
 
-- [mujoco_py](https://github.com/openai/mujoco-py)
+- [mujoco](https://github.com/openai/mujoco-py)
 - numpy (`pip install numpy`)
 - scipy (`pip install scipy`)
 - quaternion (`pip install numpy-quaternion`)
@@ -20,7 +20,7 @@ To use all functionalities of the provided library, the following dependencies h
 
 ## Setup Instructions
 
-Once mujoco_py is correctly installed, this library can be used by sourcing the `set_env.sh` file.
+Once mujoco is correctly installed, this library can be used by sourcing the `set_env.sh` file.
 
 ```bash
 source set_env.sh

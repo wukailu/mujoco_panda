@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import mujoco_py as mjp
+import mujoco as mjp
 from collections import deque
 from .mujoco_robot import MujocoRobot
 from .gravity_robot import GravityRobot
@@ -100,7 +100,7 @@ class PandaArm(MujocoRobot):
         self.unactuated_arm_joint_names = []
 
         for jnt in arm_joint_names:
-            jnt_id = self._model.joint_name2id(jnt)
+            jnt_id = self._model.joint(jnt)
             if jnt_id in self.controllable_joints:
                 self.actuated_arm_joints.append(jnt_id)
                 self.actuated_arm_joint_names.append(jnt)
@@ -126,7 +126,7 @@ class PandaArm(MujocoRobot):
                 "panda_finger_joint1", "panda_finger_joint2"]
 
             for jnt in gripper_joint_names:
-                jnt_id = self._model.joint_name2id(jnt)
+                jnt_id = self._model.joint(jnt)
                 if jnt_id in self.controllable_joints:
                     self.actuated_gripper_joints.append(jnt_id)
                     self.actuated_gripper_joint_names.append(jnt)
@@ -288,7 +288,7 @@ class PandaArm(MujocoRobot):
             acc_des = np.zeros(self._sim.model.nv)
             acc_des[torque_ids] = cmd[torque_ids]
             self._sim.data.qacc[:] = acc_des
-            mjp.functions.mj_inverse(self._model, self._sim.data)
+            mjp.mj_inverse(self._model, self._sim.data)
             cmd = self._sim.data.qfrc_inverse[torque_ids].copy()
         elif not compensate_dynamics and self._compensate_gravity:
             self._ignore_grav_comp = True
@@ -335,7 +335,7 @@ class PandaArm(MujocoRobot):
         )
         self._grav_comp_robot.sim.data.qvel[self._grav_comp_robot._controllable_joints] = 0.
         self._grav_comp_robot.sim.data.qacc[self._grav_comp_robot._controllable_joints] = 0.
-        mjp.functions.mj_inverse(
+        mjp.mj_inverse(
             self._grav_comp_robot.model, self._grav_comp_robot.sim.data)
 
         return self._grav_comp_robot.sim.data.qfrc_inverse.copy()
