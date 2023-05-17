@@ -14,7 +14,7 @@ class GravityRobot(object):
 
         self._controllable_joints = self.get_controllable_joints()
 
-        self._all_joints = [self.model.joint(j) for j in self.model.joint_names]
+        self._all_joints = [self.model.joint(j).id for j in range(len(self.model.jnt_group))]
 
     def get_controllable_joints(self):
         """

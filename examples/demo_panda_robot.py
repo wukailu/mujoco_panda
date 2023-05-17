@@ -21,12 +21,12 @@ def exec_func(cmd):
 if __name__ == "__main__":
     
     p = PandaArm.fullRobotWithTorqueActuators(render=True,compensate_gravity=True)
+    print("INIT FINISHED!")
     p.start_asynchronous_run() # run simulation in separate independent thread
 
     _cth = ParallelPythonCmd(exec_func)
 
-    while True:
-        p.render()
+    p.render()
 
 # in the parallel debug interface run PandaArm arm commands to control and monitor the robot.
 # eg: p.set_neutral_pose(), p.joint_angles(), p.ee_pose(), etc.

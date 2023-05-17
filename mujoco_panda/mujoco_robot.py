@@ -7,7 +7,8 @@ from threading import Lock
 import mujoco as mjp
 import numpy as np
 import quaternion
-from mujoco import viewer
+import mujoco_viewer
+# from mujoco import viewer
 
 from mujoco_panda.utils.mjpy_sim import OldSim
 
@@ -57,9 +58,10 @@ class MujocoRobot(object):
             print("loading from ", model_path)
             self._model = mjp.MjModel.from_xml_path(filename=model_path)
 
-        from mujoco import Renderer
+        # from mujoco import Renderer
         self._sim = OldSim(self._model)
-        self._viewer = Renderer(self._model) if render else None
+        self._viewer = mujoco_viewer.MujocoViewer(self._sim.model, self._sim.data)
+        # self._viewer = Renderer(self._model) if render else None
 
         self._has_gripper = False  # by default, assume no gripper is attached
 
@@ -71,7 +73,7 @@ class MujocoRobot(object):
         self._nq = len(self.qpos_joints)  # total number of joints
 
         self._all_joint_names = [
-            self.model.joint_id2name(j) for j in self.qpos_joints]
+            self.model.joint(j).name for j in self.qpos_joints]
 
         self._all_joint_dict = dict(
             zip(self._all_joint_names, self.qpos_joints))
@@ -107,17 +109,17 @@ class MujocoRobot(object):
         """
         self._ee_name = body_name
 
-        if body_name in self._model.site_names:
+        if mjp.mj_name2id(self._model, mjp.mjtObj.mjOBJ_SITE, body_name) != -1:
             self._ee_is_a_site = True
-            self._ee_idx = self._model.site(body_name)
+            self._ee_idx = self._model.site(body_name).id
             self._logger.debug(
                 "End-effector is a site in model: {}".format(body_name))
         else:
             self._ee_is_a_site = False
-            self._ee_idx = self._model.body(self._ee_name)
+            self._ee_idx = self._model.body(self._ee_name).id
 
     def _use_last_defined_link(self):
-        return self._model.nbody-1, self._model.body_id2name(self._model.nbody-1)
+        return self._model.nbody-1, self._model.body(self._model.nbody-1).name
 
     def add_pre_step_callable(self, f_dict):
         """
@@ -179,7 +181,8 @@ class MujocoRobot(object):
         if isinstance(bodies, str):
             bodies = [bodies]
         for body in bodies:
-            if not body in self._model.body_names:
+            # if not body in self._model.body_names:
+            if mjp.mj_name2id(self._model, mjp.mjtObj.mjOBJ_BODY, body) == -1:
                 return False
         return True
 
@@ -198,7 +201,7 @@ class MujocoRobot(object):
                 if self._ft_site_name:
                     new_sensordata = np.zeros(6)
                     _, site_ori = self.site_pose(
-                        self._model.site(self._ft_site_name))
+                        self._model.site(self._ft_site_name).id)
                     rotation_mat = quaternion.as_rotation_matrix(
                         np.quaternion(*site_ori))
                     new_sensordata[:3] = np.dot(
@@ -306,8 +309,11 @@ class MujocoRobot(object):
         if recompute and not self._forwarded:
             self.forward_sim()
 
-        jacp = self._sim.data.site_jacp[site_id, :].reshape(3, -1)
-        jacr = self._sim.data.site_jacr[site_id, :].reshape(3, -1)
+        jacp = np.zeros((3, self._sim.model.nv))
+        jacr = np.zeros((3, self._sim.model.nv))
+        mjp.mj_jacSite(self._sim.model, self._sim.data, jacp, jacr, site_id)
+        # jacp = self._sim.data.site_jacp[site_id, :].reshape(3, -1)
+        # jacr = self._sim.data.site_jacr[site_id, :].reshape(3, -1)
         return np.vstack([jacp[:, joint_indices], jacr[:, joint_indices]])
 
     def ee_pose(self):
@@ -334,7 +340,7 @@ class MujocoRobot(object):
         :rtype: np.ndarray, np.ndarray
         """
         if isinstance(body_id, str):
-            body_id = self._model.body(body_id)
+            body_id = self._model.body(body_id).id
         if recompute and not self._forwarded:
             self.forward_sim()
         return self._sim.data.body_xpos[body_id].copy(), self._sim.data.body_xquat[body_id].copy()
@@ -352,7 +358,9 @@ class MujocoRobot(object):
         :rtype: np.ndarray, np.ndarray
         """
         if isinstance(site_id, str):
-            site_id = self._model.site(site_id)
+            site_id = self._model.site(site_id).id
+        if not isinstance(site_id, int):
+            site_id = site_id.id
         if recompute and not self._forwarded:
             self.forward_sim()
         return self._sim.data.site_xpos[site_id].copy(), quaternion.as_float_array(quaternion.from_rotation_matrix(self._sim.data.site_xmat[site_id].copy().reshape(3, 3)))
@@ -382,7 +390,9 @@ class MujocoRobot(object):
         """
         if recompute and not self._forwarded:
             self.forward_sim()
-        return self._sim.data.body_xvelp[body_id].copy(), self._sim.data.body_xvelr[body_id].copy()
+        vel_ret = np.zeros(6)  # [:3] for rotational velocity, [3:] for positional velocity
+        mjp.mj_objectVelocity(self._sim.model, self._sim.data, mjp.mjtObj.mjOBJ_BODY, body_id, vel_ret, True)
+        return vel_ret[3:].copy(), vel_ret[:3].copy()
 
     def site_velocity(self, site_id, recompute=True):
         """
@@ -398,7 +408,9 @@ class MujocoRobot(object):
         """
         if recompute and not self._forwarded:
             self.forward_sim()
-        return self._sim.data.site_xvelp[site_id].copy(), self._sim.data.site_xvelr[site_id].copy()
+        vel_ret = np.zeros(6)  # [:3] for rotational velocity, [3:] for positional velocity
+        mjp.mj_objectVelocity(self._sim.model, self._sim.data, mjp.mjtObj.mjOBJ_SITE, site_id, vel_ret, True)
+        return vel_ret[3:].copy(), vel_ret[:3].copy()
 
     def _define_joint_ids(self):
         # transmission type (0 == joint)
@@ -569,6 +581,6 @@ class MujocoRobot(object):
         asynchronous simulation.
         """
         if self._viewer is not None:
-            viewer.launch_repl(self._sim.model, self._sim.data)
+            # viewer.launch_repl(self._sim.model, self._sim.data)
             # viewer.launch(self._sim.model, self._sim.data)
-            # self._viewer.render()
+            self._viewer.render()

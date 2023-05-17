@@ -100,7 +100,7 @@ class PandaArm(MujocoRobot):
         self.unactuated_arm_joint_names = []
 
         for jnt in arm_joint_names:
-            jnt_id = self._model.joint(jnt)
+            jnt_id = self._model.joint(jnt).id
             if jnt_id in self.controllable_joints:
                 self.actuated_arm_joints.append(jnt_id)
                 self.actuated_arm_joint_names.append(jnt)
@@ -126,7 +126,7 @@ class PandaArm(MujocoRobot):
                 "panda_finger_joint1", "panda_finger_joint2"]
 
             for jnt in gripper_joint_names:
-                jnt_id = self._model.joint(jnt)
+                jnt_id = self._model.joint(jnt).id
                 if jnt_id in self.controllable_joints:
                     self.actuated_gripper_joints.append(jnt_id)
                     self.actuated_gripper_joint_names.append(jnt)
@@ -155,17 +155,17 @@ class PandaArm(MujocoRobot):
 
         for idx, jnt in enumerate(self._model.actuator_trnid[:, 0].tolist()):
             assert jnt == joint_ids[idx]
-            actuator_name = self._model.actuator_id2name(idx)
+            actuator_name = self._model.actuator(idx).name
             controller_type = actuator_name.split('_')[1]
             if controller_type == 'torque' or controller_type == 'direct':
                 torque_actuator_ids.append(idx)
                 assert jnt not in self._joint_to_actuator_map, "Joint {} already has an actuator assigned!".format(
-                    self._model.joint_id2name(jnt))
+                    self._model.joint(jnt).name)
                 self._joint_to_actuator_map[jnt] = idx
             elif controller_type == 'position' or controller_type == 'pos':
                 pos_actuator_ids.append(idx)
                 assert jnt not in self._joint_to_actuator_map, "Joint {} already has an actuator assigned!".format(
-                    self._model.joint_id2name(jnt))
+                    self._model.joint(jnt).name)
                 self._joint_to_actuator_map[jnt] = idx
             else:
                 self._logger.warn(
