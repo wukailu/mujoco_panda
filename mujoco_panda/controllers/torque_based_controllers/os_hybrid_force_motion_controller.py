@@ -37,6 +37,9 @@ class OSHybridForceMotionController(ControllerBase):
         self._goal_force, self._goal_torque = np.zeros(
             3), np.zeros(3)
 
+        # gains for joints
+        self._joint_amp = np.array(self._config.get("joint_amp", 1.))
+
         # gains for position
         self._kp_p = np.diag(self._config['kp_p'])
         self._kd_p = np.diag(self._config['kd_p'])
@@ -71,6 +74,10 @@ class OSHybridForceMotionController(ControllerBase):
 
         self._angular_threshold = self._config['angular_error_thr']
 
+        self.null_space_func = lambda arm: arm._neutral_pose - arm.joint_positions()[:7]
+
+        self.rot_cmd_mask = np.array([1.]*7)
+
     def set_active(self, status=True):
         """
         Override parent method to reset goal values
@@ -84,6 +91,10 @@ class OSHybridForceMotionController(ControllerBase):
             self._goal_force, self._goal_torque = np.zeros(
                 3), np.zeros(3)
         self._is_active = status
+
+    def set_gripper_actuator(self, actuator_cmd):
+        assert len(actuator_cmd) == len(self._robot.actuated_gripper_joints)
+        self._robot.set_joint_commands(actuator_cmd, joints=self._robot.actuated_gripper_joints, compensate_dynamics=False)
 
     def _compute_cmd(self):
         """
@@ -126,7 +137,7 @@ class OSHybridForceMotionController(ControllerBase):
         # total cartesian force at end-effector
         x_des = position_control + force_control
 
-        if self._goal_ori is not None:  # orientation conttrol
+        if self._goal_ori is not None:  # orientation control
             
             if np.linalg.norm(delta_ori) < self._angular_threshold:
                 delta_ori = np.zeros(delta_ori.shape)
@@ -145,38 +156,41 @@ class OSHybridForceMotionController(ControllerBase):
             omg_des = ori_pos_ctrl + torque_f_ctrl
 
         else:
-
             omg_des = np.zeros(3)
 
-        f_ee = np.hstack([x_des, omg_des])  # Desired end-effector force
+        f_ee_x = np.hstack([x_des, np.zeros(3)])  # Desired end-effector force
+        f_ee_o = np.hstack([np.zeros(3), omg_des])  # Desired end-effector force
 
-        u = np.dot(jac_ee.T, f_ee) # desired joint torque
+        u_x = np.dot(jac_ee.T, f_ee_x) # desired joint torque
+        u_o = np.dot(jac_ee.T, f_ee_o)  # desired joint torque
+        u = u_x + self.rot_cmd_mask * u_o
 
         if np.any(np.isnan(u)):
             u = self._cmd
+            print("warning NaN found in u")
         else:
             self._cmd = u
 
         if self._use_null_ctrl: # null-space control, if required
-
             null_space_filter = self._null_Kp.dot(
                 np.eye(7) - jac_ee.T.dot(np.linalg.pinv(jac_ee.T, rcond=1e-3)))
-
-            # add null-space torque in the null-space projection of primary task
-            self._cmd = self._cmd + \
-                null_space_filter.dot(
-                    self._robot._neutral_pose-self._robot.joint_positions()[:7])
+            self._cmd = self._cmd + null_space_filter.dot(self._compute_null_space_torque())
 
         # update the error
         self._error = {'linear': delta_pos, 'angular': delta_ori}
 
-        return self._cmd
+        return self._cmd * np.array([1., 1., 1., 1., 1., 1., 5.])
+
+    def _compute_null_space_torque(self):
+        # add null-space torque in the null-space projection of primary task
+        # TODO: 给每个joint 施加一个与距离物体表面距离相关的力，作用在null space
+        return self.null_space_func(self._robot)
 
     def set_goal(self, goal_pos, goal_ori=None, goal_vel=np.zeros(3), goal_omg=np.zeros(3), goal_force=None, goal_torque=None):
         """
         change the target for the controller
         """
-        self._mutex.acquire()
+        # self._mutex.acquire()
         self._goal_pos = goal_pos
         self._goal_ori = goal_ori
         self._goal_vel = goal_vel
@@ -185,7 +199,7 @@ class OSHybridForceMotionController(ControllerBase):
             self._goal_force = - np.asarray(goal_force) # applied force = - experienced force
         if goal_torque is not None:
             self._goal_torque = - np.asarray(goal_torque) # applied torque = - experienced torque
-        self._mutex.release()
+        # self._mutex.release()
 
     def change_ft_dir(self, directions):
         """
@@ -198,7 +212,7 @@ class OSHybridForceMotionController(ControllerBase):
             orientation) controlled.
         :type directions: [int] * 6
         """
-        self._mutex.acquire()
+        # self._mutex.acquire()
         self._force_dir = np.diag(directions[:3])
 
         self._torque_dir = np.diag(directions[3:])
@@ -206,4 +220,4 @@ class OSHybridForceMotionController(ControllerBase):
         self._pos_p_dir = np.diag([1, 1, 1]) ^ self._force_dir
 
         self._pos_o_dir = np.diag([1, 1, 1]) ^ self._torque_dir
-        self._mutex.release()
+        # self._mutex.release()

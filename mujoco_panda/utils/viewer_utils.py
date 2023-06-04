@@ -2,6 +2,7 @@ from mujoco._enums import mjtGeom as const
 from .tf import quat2Mat
 
 def render_frame(viewer, pos, quat, scale = 0.1, alpha = 1.):
+    return
     """ 
     Visualise a 3D coordinate frame.
     """
@@ -35,6 +36,7 @@ def render_frame(viewer, pos, quat, scale = 0.1, alpha = 1.):
 
 
 def render_point(viewer, pos):
+    return
     viewer.add_marker(pos=pos,
                       label='',
                       type=const.mjGEOM_SPHERE,

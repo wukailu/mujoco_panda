@@ -32,12 +32,15 @@ class ControllerBase(object):
         self._cmd = self._robot.sim.data.ctrl[self._robot.actuated_arm_joints].copy(
         )
 
-        self._mutex = threading.Lock()
+        # Update: In new mujoco, should avoid parallel run, so update is controlled by main thread
+        # self._mutex = threading.Lock()
+        # self._ctrl_thread = threading.Thread(target = self._send_cmd, args=[control_rate])
+        # self._is_running = True
+        # self._ctrl_thread.start()
 
-        self._ctrl_thread = threading.Thread(target = self._send_cmd, args=[control_rate])
+        self.control_rate = control_rate
         self._is_running = True
 
-        self._ctrl_thread.start()
 
         self._error = {'linear': np.zeros(3), 'angular': np.zeros(3)}
 
@@ -74,7 +77,9 @@ class ControllerBase(object):
     def set_goal(self, *args, **kwargs):
         raise NotImplementedError("Method must be implemented in child class!")
 
-    def _send_cmd(self, control_rate):
+    # Update: In new mujoco, should avoid parallel run, so update is controlled by main thread
+    # def _send_cmd(self, control_rate):
+    def update_and_step(self):
         """
         This method runs automatically in separate thread at the specified controller
         rate. If controller is active, the command is computed and robot is commanded
@@ -83,18 +88,17 @@ class ControllerBase(object):
         :param control_rate: rate of control loop, ideally same as simulation step rate.
         :type control_rate: float
         """
-        while self._is_running:
+        # Update: In new mujoco, should avoid parallel run, so update is controlled by main thread
+        if self._is_running:
             now_c = time.time()
             if self._is_active:
-                self._mutex.acquire()
                 self._compute_cmd()
                 self._robot.set_joint_commands(
                     self._cmd, joints=self._robot.actuated_arm_joints, compensate_dynamics=False)
                 self._robot.step(render=False)
-                self._mutex.release()
 
             elapsed_c = time.time() - now_c
-            sleep_time_c = (1./control_rate) - elapsed_c
+            sleep_time_c = (1./self.control_rate) - elapsed_c
             if sleep_time_c > 0.0:
                 time.sleep(sleep_time_c)
 
@@ -108,4 +112,4 @@ class ControllerBase(object):
         self._robot._ignore_grav_comp=False
         self._logger.info ("Stopping controller thread. WARNING: PandaArm->step() method has to be called separately to continue simulation.")
         self._is_running = False
-        self._ctrl_thread.join()
+        # self._ctrl_thread.join()

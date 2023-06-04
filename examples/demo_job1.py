@@ -9,6 +9,7 @@ from mujoco_panda.controllers.torque_based_controllers import OSHybridForceMotio
 from mujoco_panda.utils.viewer_utils import render_frame
 
 
+
 def exec_func(cmd):
     if cmd == '':
         return None
@@ -58,7 +59,7 @@ def compute_force_on_points(pt):
     nearest = np.asarray(pcd.points)[idx[0]]
     distance = np.linalg.norm(nearest - pt)
     # Print the result
-    return 0.0 / (distance**2) * ((pt - nearest) / distance)
+    return 0. / (distance**2) * ((pt - nearest) / distance)
 
 def null_space_avoidance(arm: PandaArm):
     sum_u = [0. ] * 7
@@ -72,6 +73,31 @@ def null_space_avoidance(arm: PandaArm):
     return sum_u
 
 target_traj = []        # [(target_pos, target_ori),...]
+
+def run():
+    global target_traj
+    for i in range(len(target_traj)):
+        elapsed_r = 0.0
+        now_r = time.time()
+        while elapsed_r < 0.1:
+            elapsed_r = time.time() - now_r
+
+            # get current robot end-effector pose
+            robot_pos, robot_ori = p.ee_pose()
+
+            # render controller target and current ee pose using frames
+            render_frame(p.viewer, robot_pos, robot_ori)
+            render_frame(p.viewer, target_traj[i][0], target_traj[i][1], alpha=0.2)
+
+            ctrl.set_goal(target_traj[i][0], target_traj[i][1])
+
+            print(f"errors at step {i}: ", np.linalg.norm(target_traj[i][0] - robot_pos),
+                  np.linalg.norm(quatdiff_in_euler(target_traj[i][1], robot_ori)))
+
+            ctrl.update_and_step()
+            p.render() # render the visualisation
+
+    target_traj = [target_traj[-1]]
 def move_to(target_xyz, target_ori=None):
     global target_traj
     if len(target_traj) == 0:
@@ -88,10 +114,13 @@ def move_to(target_xyz, target_ori=None):
     target_traj += [(pos, ori) for pos, ori in
                     zip(np.linspace(last_xyz, target_xyz, steps), np.linspace(last_ori, target_ori, steps))]
 
+    run()
+
 def wait(steps):
     global target_traj
     assert len(target_traj) > 0
     target_traj += [target_traj[-1]] * steps
+    run()
 
 if __name__ == "__main__":
     import open3d as o3d
@@ -100,87 +129,50 @@ if __name__ == "__main__":
     mesh = o3d.io.read_triangle_mesh(os.path.join(MODEL_PATH, "meshes/collision/bottle.stl"))
     # Sample a point cloud from the mesh
     pcd = mesh.sample_points_uniformly(number_of_points=1000)
-    pcd.points = o3d.utility.Vector3dVector(np.array(pcd.points) + np.array([0.4, 0.0, 0.5125]))
+    pcd.points = o3d.utility.Vector3dVector(np.array(pcd.points) + np.array([0.35, 0.2, 0.4125]))
     # Create a KDTree for the point cloud
     kdtree = o3d.geometry.KDTreeFlann(pcd)
-
     # init arms
-    p = PandaArm(model_path=MODEL_PATH+'panda_bottle_table.xml',
+    p = PandaArm(model_path=MODEL_PATH+'panda_table.xml',
                  render=True, compensate_gravity=False, smooth_ft_sensor=True)
 
     if mujoco.mj_isPyramidal(p.model):
         print("Type of friction cone is pyramidal")
     else:
         print("Type of friction cone is eliptical")
-
     # cmd = ParallelPythonCmd(exec_func)
-    p.set_neutral_pose()
+    p.set_neutral_pose()    # cur_ee (0.3, 0, 0.6) (0, -0.924, -0.382, 0)
     p.step()
-    
+
+    from utils.tf import quat2euler, euler2quat, quatdiff_in_euler
+    from math import pi
+    print("quat2euler:", quat2euler(np.array((0, -0.924, -0.382, 0))))  # [0.75 pi, 0, pi]
+    print("euler2quat:", euler2quat(np.array([135, 0., 180])))
+    print("double: ", euler2quat(quat2euler((0, -0.924, -0.382, 0))))
+
     # create controller instance with default controller gains
-    ctrl = OSHybridForceMotionController(p, config=ctrl_config)    
-    ctrl.null_space_func = null_space_avoidance
+    ctrl = OSHybridForceMotionController(p, config=ctrl_config)
+    ctrl.set_active(True) # activate controller (simulation step and controller thread now running)
+    # ctrl.null_space_func = null_space_avoidance
+
     # --- define trajectory in position -----
     target_traj = []
     curr_ee, curr_ori = p.ee_pose()
-    move_to(curr_ee, np.asarray([0, -0.924, -0.383, 0.], dtype=np.float64))
-
-    goal_pos_1 = np.array([curr_ee[0] + 0.15, curr_ee[1] - 0.2, 0.58])
-    move_to(goal_pos_1)
-
-    wait(30)
-    step_near_z = len(target_traj)
-
-    goal_pos_2 = goal_pos_1.copy()
-    goal_pos_2[2] = 0.55
-    move_to(goal_pos_2)
-
+    move_to(curr_ee, curr_ori)
+    # move_to(curr_ee, np.asarray(euler2quat(np.array([135, 0., 180])), dtype=np.float64))
     wait(50)
-    goal_pos_3 = goal_pos_2.copy()
-    goal_pos_3[1] += 0.4
-    move_to(goal_pos_3)
-    wait(30)
-
-    print("way points:", curr_ee, goal_pos_1, goal_pos_2, goal_pos_3)
-    print("current orientation: ", curr_ori)
-    print("target orientation: ", [0, -0.924, -0.383, 0.])
+    move_to(curr_ee + np.array([0., 0., 0.2]), curr_ori)
+    # ctrl.set_gripper_actuator([1., 1.])
+    wait(50)
+    # ctrl.set_gripper_actuator([-1., -1.])
+    move_to(curr_ee + np.array([0., 0.2, 0.2]), curr_ori)
+    wait(50)
+    # ctrl.set_gripper_actuator([0., 0.])
+    move_to(curr_ee + np.array([0., 0.2, 0.]), curr_ori)
+    wait(50)
+    move_to(curr_ee, curr_ori)
+    wait(50)
     # --------------------------------------
-
-    max_speed = 0.1
-    ctrl.set_active(True) # activate controller (simulation step and controller thread now running)
-    for i in range(len(target_traj)):
-        elapsed_r = 0.0
-        now_r = time.time()
-        while elapsed_r < 0.1:
-            elapsed_r = time.time() - now_r
-
-            # get current robot end-effector pose
-            robot_pos, robot_ori = p.ee_pose()
-
-            # render controller target and current ee pose using frames
-            render_frame(p.viewer, robot_pos, robot_ori)
-            render_frame(p.viewer, target_traj[i][0], target_traj[i][1], alpha=0.2)
-
-            if i >= step_near_z: # activate force control when the robot is near the table
-                ctrl.change_ft_dir([0,0,1,0,0,0]) # start force control along Z axis
-                ctrl.set_goal(target_traj[i][0], target_traj[i][1], goal_force=[0, 0, -25], goal_vel=[0., 0, 0]) # target force in cartesian frame
-            else:
-                # if np.linalg.norm(p.ee_velocity()[0]) > max_speed:
-                #     # limit the speed
-                #     ctrl.change_ft_dir([1, 1, 1, 0, 0, 0])
-                #     ctrl.set_goal(target_traj[i][0], target_traj[i][1])
-                #
-                #     # d((v_now - v_tar)^2)/d(pos_act) = d((v_now - v_tar)^2)/ d(pos_joint) * d(pos_joint) /d(pos_act)
-                #     # = (v_now - v_tar) * d(a_joint) * d(pos_joint) /d(pos_act)
-                # else:
-                ctrl.set_goal(target_traj[i][0], target_traj[i][1])
-
-            print(f"errors at step {i}: ", np.linalg.norm(target_traj[i][0] - robot_pos), np.linalg.norm(target_traj[i][1] - robot_ori))
-
-            # change target less frequently compared to render rate
-            # print ("smoothed FT reading: ", p.get_ft_reading(pr=True))
-            ctrl.update_and_step()
-            p.render() # render the visualisation
     
     input("Trajectory complete. Deactivate controller")
     ctrl.set_active(False)

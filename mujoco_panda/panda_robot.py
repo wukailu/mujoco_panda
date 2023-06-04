@@ -233,7 +233,7 @@ class PandaArm(MujocoRobot):
         Uses available actuator to control the specified joints. Automatically selects
         and controls the actuator for joints of the provided ids.
 
-        :param cmd: joint commands
+        :param cmd: joint commands'
         :type cmd: np.ndarray or [float]
         :param joints: ids of joints to command, defaults to all controllable joints
         :type joints: [int], optional
@@ -248,15 +248,22 @@ class PandaArm(MujocoRobot):
         act_ids = self.get_actuator_ids(joints)
         cmd = np.asarray(cmd)
 
-        torque_ids = np.intersect1d(act_ids, self._torque_actuators)
-        pos_ids = np.intersect1d(act_ids, self._pos_actuators)
+        cmd_torque, torque_ids = [], []
+        cmd_pos, pos_ids = [], []
+        for c, ids in zip(cmd, act_ids):
+            if ids in self._torque_actuators:
+                cmd_torque.append(c)
+                torque_ids.append(ids)
+            if ids in self._pos_actuators:
+                cmd_pos.append(c)
+                pos_ids.append(ids)
 
         if len(torque_ids) > 0:
             self.set_joint_torques(
-                cmd[torque_ids], torque_ids, *args, **kwargs)
+                cmd, torque_ids, *args, **kwargs)
 
         if len(pos_ids) > 0:
-            self.set_joint_positions(cmd[pos_ids], pos_ids, *args, **kwargs)
+            self.set_joint_positions(cmd, pos_ids, *args, **kwargs)
 
     def set_joint_torques(self, cmd, joint_ids=None, compensate_dynamics=False):
         """
@@ -280,22 +287,22 @@ class PandaArm(MujocoRobot):
 
         torque_ids = np.intersect1d(act_ids, self._torque_actuators)
 
-        assert cmd[torque_ids].shape[0] == torque_ids.shape[0]
+        assert cmd.shape[0] == torque_ids.shape[0]
 
         # Cancel other dynamics
         if compensate_dynamics:
             self._ignore_grav_comp = True
             acc_des = np.zeros(self._sim.model.nv)
-            acc_des[torque_ids] = cmd[torque_ids]
+            acc_des[torque_ids] = cmd
             self._sim.data.qacc[:] = acc_des
             mjp.mj_inverse(self._model, self._sim.data)
             cmd = self._sim.data.qfrc_inverse[torque_ids].copy()
         elif not compensate_dynamics and self._compensate_gravity:
             self._ignore_grav_comp = True
-            cmd[torque_ids] += self.gravity_compensation_torques()[torque_ids]
+            cmd += self.gravity_compensation_torques()[torque_ids]
 
         if len(torque_ids) > 0:
-            self.set_actuator_ctrl(cmd[torque_ids], torque_ids)
+            self.set_actuator_ctrl(cmd, torque_ids)
 
     def set_joint_positions(self, cmd=None, joint_ids=None, *args, **kwargs):
         """
@@ -336,7 +343,7 @@ class PandaArm(MujocoRobot):
         self._grav_comp_robot.sim.data.qvel[self._grav_comp_robot._controllable_joints] = 0.
         self._grav_comp_robot.sim.data.qacc[self._grav_comp_robot._controllable_joints] = 0.
         mjp.mj_inverse(
-            self._grav_comp_robot.model, self._grav_comp_robot.sim.data)
+            self._grav_comp_robot.sim.model, self._grav_comp_robot.sim.data)
 
         return self._grav_comp_robot.sim.data.qfrc_inverse.copy()
 

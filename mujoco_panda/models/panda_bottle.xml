@@ -1,0 +1,44 @@
+<?xml version="1.0" ?>
+<mujoco model="mujoco_panda_model">
+
+    <include file="other/simple_scene.xml"/>
+    <include file="panda/assets.xml"/>
+    <compiler meshdir=""/>
+
+    <default>  
+        <default class="block_visual">
+          <geom contype="0" conaffinity="0"/>
+        </default>
+        <default class="block_collision">
+          <geom contype="1" conaffinity="1" condim="4" solimp="0.99 0.99 0.01" solref="0.01 1"/>
+        </default>
+        <default class="bottle_visual">
+          <geom contype="0" conaffinity="0" type="mesh" mass="0"/>
+        </default>
+        <default class="bottle_collision">
+          <geom contype="1" conaffinity="1" condim="4" solimp="0.99 0.99 0.01" solref="0.01 1" type="mesh" density="1000"/>
+        </default>
+        <site rgba="1 0 0 .5"/>
+    </default>
+
+    <option cone="elliptic" timestep="0.001" integrator="Euler">
+        <flag gravity="disable"/>
+    </option>
+
+    <worldbody>
+        <include file="panda/arm_with_gripper.xml"/>
+        <body name="bottle" pos="0.35 0.2 0.4125">
+            <geom class="bottle_visual" rgba="0.8 0.4 0.3 1" mesh="bottle0_visual"/>
+            <geom class="bottle_collision" rgba="0.8 0.4 0.3 1" mesh="bottle0_collision"/>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <include file="panda/actuators/torque_with_gripper.xml"/>
+    </actuator>
+
+    <sensor>
+        <include file="panda/sensors/ft_sensor.xml" />
+    </sensor>
+
+</mujoco>

@@ -21,6 +21,27 @@ P_ori = 200.
 # damping gains
 D_pos = 2.*np.sqrt(P_pos)
 D_ori = 1.
+
+def force_init():
+    global P_pos, P_ori, D_pos, D_ori
+    # stiffness gains
+    P_pos = 1500.
+    P_ori = 200.
+    # damping gains
+    D_pos = 2.*np.sqrt(P_pos)
+    D_ori = 1.
+
+def force_decay():
+    global P_pos, P_ori, D_pos, D_ori
+    # stiffness gains
+    P_pos *= 0.8
+    P_ori *= 0.8
+    # damping gains
+    D_pos *= 0.8
+    D_ori *= 0.8
+
+    if max(P_pos, P_ori, D_pos, D_ori) <= 1e-10:
+        force_init()
 # -----------------------------------------
 
 
@@ -37,26 +58,28 @@ def compute_ts_force(curr_pos, curr_ori, goal_pos, goal_ori, curr_vel, curr_omg)
     return F, error
 
 
+threshold = 0.005
 def controller_thread(ctrl_rate):
-    global p, target_pos
+    global p, target_pos, error
 
-    threshold = 0.005
 
     target_pos = curr_ee.copy()
-    while run_controller:
-
-        error = 100.
-        while error > threshold:
+    if run_controller:
+        if error > threshold:
             now_c = time.time()
             curr_pos, curr_ori = p.ee_pose()
             curr_vel, curr_omg = p.ee_velocity()
 
             target_pos[2] = z_target
-            F, error = compute_ts_force(
+            F, new_error = compute_ts_force(
                 curr_pos, curr_ori, target_pos, original_ori, curr_vel, curr_omg)
 
+            if new_error > error:
+                force_decay()
+
+            error = new_error
             if error <= threshold:
-                break
+                return
 
             impedance_acc_des = np.dot(p.jacobian().T, F).flatten().tolist()
 
@@ -91,24 +114,24 @@ if __name__ == "__main__":
 
     target_pos = curr_ee
     run_controller = True
-    ctrl_thread = threading.Thread(target=controller_thread, args=[ctrl_rate])
-    ctrl_thread.start()
+
+    error = 100.
+    # ctrl_thread = threading.Thread(target=controller_thread, args=[ctrl_rate])
+    # ctrl_thread.start()
 
     now_r = time.time()
     i = 0
-    while i < len(target_z_traj):
-        z_target = target_z_traj[i]
+    for z_target in target_z_traj:
+        print("now target: ", z_target)
+        error = 100.
+        while error > threshold:
+            print("error now:", error, " threshold: ", threshold, "P_pos:", P_pos)
+            robot_pos, robot_ori = p.ee_pose()
+            controller_thread(ctrl_rate)
 
-        robot_pos, robot_ori = p.ee_pose()
-        elapsed_r = time.time() - now_r
-
-        if elapsed_r >= 0.1:
-            i += 1
-            now_r = time.time()
-        render_frame(p.viewer, robot_pos, robot_ori)
-        render_frame(p.viewer, target_pos, original_ori, alpha=0.2)
-
-        p.render()
+            render_frame(p.viewer, robot_pos, robot_ori)
+            render_frame(p.viewer, target_pos, original_ori, alpha=0.2)
+            p.render()
 
     print("Done controlling. Press Ctrl+C to quit.")
 
@@ -117,6 +140,3 @@ if __name__ == "__main__":
         render_frame(p.viewer, robot_pos, robot_ori)
         render_frame(p.viewer, target_pos, original_ori, alpha=0.2)
         p.render()
-
-    run_controller = False
-    ctrl_thread.join()

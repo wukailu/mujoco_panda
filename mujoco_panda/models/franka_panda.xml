@@ -6,7 +6,8 @@
     <compiler meshdir=""/>
 
     <option cone="elliptic">
-        <flag gravity="enable"/>
+<!--        <flag gravity="enable"/>-->
+        <flag gravity="disable"/>
     </option>
 
     <worldbody>

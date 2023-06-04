@@ -10,7 +10,7 @@ def euler2quat(euler, degrees=True, flip=False):
         return np.hstack([q[-1], q[:3]])
     return q
 
-def quat2euler(quat, degrees=False, flip=False):
+def quat2euler(quat, degrees=True, flip=False):
     if flip:
         quat = np.hstack([quat[1:4], quat[0]])
     r = R.from_quat(quat)

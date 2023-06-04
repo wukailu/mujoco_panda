@@ -8,7 +8,7 @@ import mujoco as mjp
 import numpy as np
 import quaternion
 import mujoco_viewer
-# from mujoco import viewer
+from mujoco import viewer
 
 from mujoco_panda.utils.mjpy_sim import OldSim
 
@@ -60,8 +60,8 @@ class MujocoRobot(object):
 
         # from mujoco import Renderer
         self._sim = OldSim(self._model)
-        self._viewer = mujoco_viewer.MujocoViewer(self._sim.model, self._sim.data)
-        # self._viewer = Renderer(self._model) if render else None
+        # self._viewer = mujoco_viewer.MujocoViewer(self._sim.model, self._sim.data)
+        self._viewer = mjp.viewer.launch_passive(self._sim.model, self._sim.data) if render else None
 
         self._has_gripper = False  # by default, assume no gripper is attached
 
@@ -276,6 +276,8 @@ class MujocoRobot(object):
             body_id = self._ee_idx
             if self._ee_is_a_site:
                 return self.site_jacobian(body_id, joint_indices)
+        elif isinstance(body_id, str):
+            body_id = self._model.body(body_id).id
 
         if joint_indices is None:
             joint_indices = self.controllable_joints
@@ -283,8 +285,9 @@ class MujocoRobot(object):
         if recompute and not self._forwarded:
             self.forward_sim()
 
-        jacp = self._sim.data.body_jacp[body_id, :].reshape(3, -1)
-        jacr = self._sim.data.body_jacr[body_id, :].reshape(3, -1)
+        jacp = np.zeros((3, self._sim.model.nv))
+        jacr = np.zeros((3, self._sim.model.nv))
+        mjp.mj_jacBody(self._sim.model, self._sim.data, jacp, jacr, body_id)
 
         return np.vstack([jacp[:, joint_indices], jacr[:, joint_indices]])
 
@@ -312,8 +315,6 @@ class MujocoRobot(object):
         jacp = np.zeros((3, self._sim.model.nv))
         jacr = np.zeros((3, self._sim.model.nv))
         mjp.mj_jacSite(self._sim.model, self._sim.data, jacp, jacr, site_id)
-        # jacp = self._sim.data.site_jacp[site_id, :].reshape(3, -1)
-        # jacr = self._sim.data.site_jacr[site_id, :].reshape(3, -1)
         return np.vstack([jacp[:, joint_indices], jacr[:, joint_indices]])
 
     def ee_pose(self):
@@ -343,7 +344,7 @@ class MujocoRobot(object):
             body_id = self._model.body(body_id).id
         if recompute and not self._forwarded:
             self.forward_sim()
-        return self._sim.data.body_xpos[body_id].copy(), self._sim.data.body_xquat[body_id].copy()
+        return self._sim.data.xpos[body_id].copy(), self._sim.data.xquat[body_id].copy()
 
     def site_pose(self, site_id, recompute=True):
         """
@@ -508,8 +509,7 @@ class MujocoRobot(object):
         @type cmd   : [float] * self._nu
         """
         cmd = np.asarray(cmd).flatten()
-        actuator_ids = np.r_[:cmd.shape[0]
-                             ] if actuator_ids is None else np.r_[actuator_ids]
+        actuator_ids = np.r_[:cmd.shape[0]] if actuator_ids is None else np.r_[actuator_ids]
 
         assert cmd.shape[0] == actuator_ids.shape[0]
 
@@ -520,7 +520,7 @@ class MujocoRobot(object):
         Hard set robot joints to the specified values. Used mainly when
         using torque actuators in model.
 
-        :param values: joint positions
+        :param values: joint positions'
         :type values: np.ndarray / [float]
         :param indices: indices of joints to use, defaults to the first :math:`n` joints in model,
             where :math:`n` is the number of values in :param:`joints`.
@@ -583,4 +583,6 @@ class MujocoRobot(object):
         if self._viewer is not None:
             # viewer.launch_repl(self._sim.model, self._sim.data)
             # viewer.launch(self._sim.model, self._sim.data)
-            self._viewer.render()
+            # self._viewer.render()
+            if self._viewer.is_running():
+                self._viewer.sync()

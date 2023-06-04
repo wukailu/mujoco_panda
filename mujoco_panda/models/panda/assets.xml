@@ -3,6 +3,9 @@
     <compiler angle="radian"/>
 
     <asset>
+        <mesh name="bottle0_collision" file="meshes/collision/bottle.stl"/>
+        <mesh name="bottle0_visual" file="meshes/visual/bottle.stl"/>
+
         <mesh name="link0_collision" file="meshes/collision/link0.stl"/>
         <mesh name="link1_collision" file="meshes/collision/link1.stl"/>
         <mesh name="link2_collision" file="meshes/collision/link2.stl"/>
