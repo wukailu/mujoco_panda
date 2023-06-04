@@ -1,3 +1,11 @@
+# Mujoco Panda for Deepmind Mujoco
+
+* The original [project](https://github.com/justagist/mujoco_panda) is built on Mujoco-py which is developed by OpenAI.
+* This project migrates it to new [Mujoco](https://github.com/deepmind/mujoco) by Deepmind.
+* The function utils drawing points is not migrated, since I did not find the corresponding function. 
+
+--------------------------------
+
 # Mujoco Panda
 
 - Franka Emika Panda Robot model definitions for Mujoco.
@@ -12,7 +20,8 @@ Robot models are in [mujoco_panda/models](mujoco_panda/models).
 
 To use all functionalities of the provided library, the following dependencies have to be met.
 
-- [mujoco](https://github.com/openai/mujoco-py)
+- [mujoco](https://github.com/openai/mujoco-py) (Not required anymore)
+- [Mujoco](https://github.com/deepmind/mujoco)
 - numpy (`pip install numpy`)
 - scipy (`pip install scipy`)
 - quaternion (`pip install numpy-quaternion`)
