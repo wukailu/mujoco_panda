@@ -161,9 +161,11 @@ if __name__ == "__main__":
     move_to(curr_ee, curr_ori)
     # move_to(curr_ee, np.asarray(euler2quat(np.array([135, 0., 180])), dtype=np.float64))
     wait(50)
-    ctrl.set_gripper_actuator([1., 1.])
-    wait(50)
-    ctrl.set_gripper_actuator([-1., -1.])
+    ctrl.set_gripper_actuator([5., 5.])
+    wait(30)
+    ctrl.set_gripper_actuator([0., 0.])
+    wait(20)
+    ctrl.set_gripper_actuator([-5., -5.])
     wait(50)
     # --------------------------------------
     
